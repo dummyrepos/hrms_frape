@@ -130,6 +130,7 @@ jobs:
             pgrep honcho | xargs kill
             rm -rf ~/frappe-bench/env
             bench -v setup env
+            bench pip install -e ./apps/erpnext
             bench pip install -e ./apps/hrms
             bench start &>> ~/frappe-bench/bench_start.log &
 
@@ -148,6 +149,7 @@ jobs:
           pgrep honcho | xargs kill
           rm -rf ~/frappe-bench/env
           bench -v setup env
+          bench pip install -e ./apps/erpnext
           bench pip install -e ./apps/hrms
           bench start &>> ~/frappe-bench/bench_start.log &
 
