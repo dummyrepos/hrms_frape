@@ -58,12 +58,8 @@ class JobApplicant(Document):
 
 
 @frappe.whitelist()
-def create_interview(doc, interview_type):
-	import json
-
-	if isinstance(doc, str):
-		doc = json.loads(doc)
-		doc = frappe.get_doc(doc)
+def create_interview(job_applicant: str, interview_type: str):
+	doc = frappe.get_doc("Job Applicant", job_applicant)
 
 	round_designation = frappe.db.get_value("Interview Type", interview_type, "designation")
 
@@ -89,7 +85,7 @@ def create_interview(doc, interview_type):
 
 
 @frappe.whitelist()
-def get_interview_details(job_applicant):
+def get_interview_details(job_applicant: str):
 	interview_details = frappe.db.get_all(
 		"Interview",
 		filters={"job_applicant": job_applicant, "docstatus": ["!=", 2]},
