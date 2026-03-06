@@ -26,7 +26,7 @@ jobs:
     - id: set-matrix
       run: |
         # Use grep and find to get the list of test files
-        matrix=$(find . -path '*/test_*.py' | xargs grep -l 'def test_' | sort | head -n 20 | awk '{
+        matrix=$(find . -path '*/test_*.py' | xargs grep -l 'def test_' | sort | awk '{
             # Remove ./ prefix, file extension, and replace / with .
             gsub(/^\.\//, "", $0)
             gsub(/\.py$/, "", $0)
