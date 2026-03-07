@@ -63,7 +63,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.discover.outputs.matrix)}}
-      max-parallel: 10
+      # max-parallel: 10
 
     name: Test
 
