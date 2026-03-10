@@ -14,7 +14,7 @@
    "indent": 0,
    "keep_closed": 0,
    "label": "Home",
-   "link_to": "People",
+   "link_to": "Setup",
    "link_type": "Workspace",
    "show_arrow": 0,
    "type": "Link"
@@ -148,10 +148,11 @@
    "url": "/desk/hr-settings#employee_tab"
   }
  ],
- "modified": "2026-01-09 17:22:08.890026",
+ "modified": "2026-03-09 17:19:36.620545",
  "modified_by": "Administrator",
  "module": "HR",
- "name": "People",
+ "name": "Setup",
  "owner": "Administrator",
- "title": "People"
+ "standard": 1,
+ "title": "Setup"
 }
