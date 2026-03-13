@@ -59,8 +59,8 @@ import FormView from "@/components/FormView.vue"
 import ExpensesTable from "@/components/ExpensesTable.vue"
 import ExpenseTaxesTable from "@/components/ExpenseTaxesTable.vue"
 import ExpenseAdvancesTable from "@/components/ExpenseAdvancesTable.vue"
-
 import { getCompanyCurrency } from "@/data/currencies"
+import { updateCurrencyLabels, updateBaseFieldsAmount } from "@/composables/useCurrencyConversion"
 
 
 const dayjs = inject("$dayjs")
@@ -90,9 +90,11 @@ const tabs = [
 const expenseClaim = ref({
 	employee: currEmployee,
 	company: employeeCompany,
+	doctype: "Expense Claim",
 })
 
-const currency = computed(() => getCompanyCurrency(expenseClaim.value.company))
+const currency = computed(() => expenseClaim.value.currency)
+const companyCurrency = computed(() => getCompanyCurrency(expenseClaim.value.company))
 
 // get form fields
 const formFields = createResource({
@@ -116,35 +118,22 @@ formFields.reload()
 // resources
 const advances = createResource({
 	url: "hrms.hr.doctype.expense_claim.expense_claim.get_advances",
-	params: { employee: currEmployee.value },
+	params: { expense_claim: expenseClaim.value },
 	auto: true,
+	transform(data) {
+		if (!data) return []
+		return data.map((item) => ({
+			...item,
+			selected: parseFloat(item.allocated_amount || 0) > 0,
+			allocated_amount: item.allocated_amount || 0
+		}))
+	},
 	onSuccess(data) {
-		// set advances
-		if (props.id) {
-			expenseClaim.value.advances?.map((advance) => (advance.selected = true))
-		} else {
-			expenseClaim.value.advances = []
+		// Only replace if the resource found data
+		if (data && data.length > 0) {
+			expenseClaim.value.advances = data
+			calculateTotalAdvance()
 		}
-
-		return data.forEach((advance) => {
-			if (
-				props.id &&
-				expenseClaim.value.advances?.some(
-					(entry) => entry.employee_advance === advance.name
-				)
-			)
-				return
-
-			expenseClaim.value.advances?.push({
-				employee_advance: advance.name,
-				purpose: advance.purpose,
-				posting_date: advance.posting_date,
-				advance_account: advance.advance_account,
-				advance_paid: advance.paid_amount,
-				unclaimed_amount: advance.paid_amount - advance.claimed_amount,
-				allocated_amount: 0,
-			})
-		})
 	},
 })
 
@@ -163,6 +152,13 @@ const companyDetails = createResource({
 		expenseClaim.value.cost_center = data?.cost_center
 		expenseClaim.value.payable_account =
 			data?.default_expense_claim_payable_account
+	},
+})
+
+const exchangeRate = createResource({
+	url: "erpnext.setup.utils.get_exchange_rate",
+	onSuccess(data) {
+		expenseClaim.value.exchange_rate = data
 	},
 })
 
@@ -186,9 +182,21 @@ watch(
 	}
 )
 watch(
-	() => props.id && expenseClaim.value.expenses,
+	() => expenseClaim.value.currency,
+	(currency) => {
+		if (!currency) {
+			expenseClaim.value.exchange_rate = 0
+			return
+		}
+
+		setExchangeRate()
+		formFields.reload()
+	}
+)
+watch(
+	() => expenseClaim.value.expenses,
 	(_) => {
-		if (expenseClaim.value.docstatus === 0) {
+		if (!props.id && expenseClaim.value.docstatus === 0) {
 			advances.reload()
 		}
 	}
@@ -203,6 +211,26 @@ watch(
 )
 
 watch(
+	() => expenseClaim.value,
+	(newDoc) => {
+		if (newDoc?.advances?.length > 0) {
+			let needsRecalc = false
+			newDoc.advances.forEach(advance => {
+				// Reapply the "selected" flag if money is allocated
+				if (parseFloat(advance.allocated_amount || 0) > 0 && !advance.selected) {
+					advance.selected = true
+					needsRecalc = true
+				}
+			})
+			if (needsRecalc) {
+				calculateTotalAdvance()
+			}
+		}
+	},
+	{ immediate: true }
+)
+
+watch(
 	() => expenseClaim.value.cost_center,
 	() => {
 		expenseClaim?.value?.expenses?.forEach((expense) => {
@@ -210,6 +238,59 @@ watch(
 		})
 	}
 )
+
+watch(
+	() => [formFields.data, expenseClaim.value.currency],
+	([fields, currency]) => {
+		if (!fields || !currency) return
+
+		updateCurrencyLabels({
+			formFields: fields,
+			doc: expenseClaim.value,
+			baseFields: [
+				"base_total_sanctioned_amount",
+				"base_total_taxes_and_charges",
+				"base_total_advance_amount",
+				"base_grand_total",
+				"base_total_claimed_amount"
+			],
+			transactionFields: [
+				"total_sanctioned_amount",
+				"total_taxes_and_charges",
+				"total_advance_amount",
+				"grand_total",
+				"total_claimed_amount"
+			],
+		})
+	},
+	{ immediate: true }
+)
+
+watch(
+    () => [
+        expenseClaim.value.total_sanctioned_amount,
+        expenseClaim.value.total_advance_amount,
+        expenseClaim.value.grand_total,
+        expenseClaim.value.total_claimed_amount,
+        expenseClaim.value.total_taxes_and_charges,
+        expenseClaim.value.exchange_rate
+    ],
+    () => {
+        const fieldsToConvert = [
+            "total_sanctioned_amount",
+            "total_advance_amount",
+            "grand_total",
+            "total_claimed_amount",
+            "total_taxes_and_charges"
+        ];
+        updateBaseFieldsAmount({
+			doc: expenseClaim.value,
+			fields: fieldsToConvert,
+			exchangeRate: expenseClaim.value.exchange_rate,
+		});
+    },
+    { deep: true }
+);
 
 // helper functions
 function getFilteredFields(fields) {
@@ -245,6 +326,7 @@ function applyFilters(field) {
 			account_type: "Payable",
 			company: expenseClaim.value.company,
 			is_group: 0,
+			account_currency: currency.value,
 		}
 	} else if (field.fieldname === "cost_center") {
 		field.linkFilters = {
@@ -364,6 +446,8 @@ function allocateAdvanceAmount() {
 	let amount_to_be_allocated =
 		parseFloat(expenseClaim.value.total_sanctioned_amount) +
 		parseFloat(expenseClaim.value.total_taxes_and_charges)
+
+	if (!amount_to_be_allocated) return
 	let total_advance_amount = 0
 
 	expenseClaim?.value?.advances?.forEach((advance) => {
@@ -387,8 +471,8 @@ function calculateTotalAdvance() {
 	let total_advance_amount = 0
 
 	expenseClaim?.value?.advances?.forEach((advance) => {
-		if (advance.selected) {
-			total_advance_amount += parseFloat(advance.allocated_amount)
+		if (advance.selected || parseFloat(advance.allocated_amount) > 0) {
+			total_advance_amount += parseFloat(advance.allocated_amount || 0)
 		}
 	})
 	expenseClaim.value.total_advance_amount = total_advance_amount
@@ -413,4 +497,22 @@ function validateForm() {
 	})
 }
 
+function setExchangeRate() {
+	if (!expenseClaim.value.currency || !formFields.data) return
+	const exchange_rate_field = formFields.data?.find(
+		(field) => field.fieldname === "exchange_rate"
+	)
+
+	if (currency.value === companyCurrency.value) {
+		expenseClaim.value.exchange_rate = 1
+		if (exchange_rate_field) exchange_rate_field.hidden = 1
+	}
+	if (!expenseClaim.value.exchange_rate) {
+		exchangeRate.fetch({
+			from_currency: currency.value,
+			to_currency: companyCurrency.value,
+		})
+	}
+	if (exchange_rate_field) exchange_rate_field.hidden = 0
+}
 </script>
