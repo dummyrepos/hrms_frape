@@ -1,5 +1,7 @@
 import frappe
+from frappe.utils import getdate
 
+from erpnext.accounts.utils import get_fiscal_year
 from erpnext.tests.utils import ERPNextTestSuite
 
 
@@ -8,38 +10,86 @@ class HRMSTestSuite(ERPNextTestSuite):
 
 	@classmethod
 	def setUpClass(cls):
-		super().setUpClass()
+		cls.make_presets()
+		cls.make_persistent_master_data()
 
 	@classmethod
-	def make_employees(cls):
-		"""Create test employees"""
-		# Create test employees here
-		super().make_employees()
+	def make_presets(cls):
+		cls.make_designations()
 
 	@classmethod
-	def make_departments(cls):
-		"""Create test departments"""
-		# Create test departments here
+	def make_designations(cls):
+		designations = [
+			"Engineer",
+			"Project Manager",
+			"Researcher",
+			"Accountant",
+			"Manager",
+			"Software Developer",
+			"UX Designer",
+			"Designer",
+		]
+		records = [{"doctype": "Designation", "designation_name": x} for x in designations]
+		cls.make_records(["designation_name"], records, "designations")
+
+	@classmethod
+	def make_persistent_master_data(cls):
+		cls.make_company()
+		cls.make_holiday_list()
+		cls.make_holiday_list_assignment()
+		cls.make_leave_types()
+		cls.make_leave_period()
+		cls.make_leave_block_lists()
+		cls.make_leave_allocations()
+		cls.make_leave_applications()
+		cls.update_email_account_settings()
+		# TODO: clean up
+		if frappe.db.get_value("Holiday List Assignment", {"assigned_to": "_Test Company"}, "docstatus") == 0:
+			frappe.get_doc("Holiday List Assignment", {"assigned_to": "_Test Company"}).submit()
+		frappe.db.commit()
+
+	@classmethod
+	def make_company(cls):
 		records = [
 			{
-				"doctype": "Department",
-				"department_name": "_Test Department",
-				"company": "_Test Company",
-				"parent_department": "All Departments",
-			},
-			{
-				"doctype": "Department",
-				"department_name": "_Test Department 1",
-				"company": "_Test Company",
-				"parent_department": "All Departments",
-			},
+				"abbr": "_TC",
+				"company_name": "_Test Company",
+				"country": "India",
+				"default_currency": "INR",
+				"doctype": "Company",
+				"chart_of_accounts": "Standard",
+			}
 		]
-		cls.departments = []
-		for x in records:
-			if not frappe.db.exists("Department", x.get("department_name")):
-				cls.departments.append(frappe.get_doc(x).insert())
-			else:
-				cls.departments.append(frappe.get_doc("Department", x.get("department_name")))
+		cls.make_records(["company_name"], records, "companies")
+
+	@classmethod
+	def make_holiday_list_assignment(cls):
+		fiscal_year = get_fiscal_year(getdate())
+		records = [
+			{
+				"doctype": "Holiday List Assignment",
+				"applicable_for": "Company",
+				"assigned_to": "_Test Company",
+				"holiday_list": "Salary Slip Test Holiday List",
+				"from_date": fiscal_year[1],
+				"to_date": fiscal_year[2],
+			}
+		]
+		cls.make_records(["assigned_to", "from_date"], records, "holiday_list_assignment")
+
+	@classmethod
+	def make_holiday_list(cls):
+		fiscal_year = get_fiscal_year(getdate())
+		records = [
+			{
+				"doctype": "Holiday List",
+				"from_date": fiscal_year[1],
+				"to_date": fiscal_year[2],
+				"holiday_list_name": "Salary Slip Test Holiday List",
+				"weekly_off": "Sunday",
+			}
+		]
+		cls.make_records(["from_date", "to_date", "holiday_list_name"], records, "holiday_list")
 
 	@classmethod
 	def make_leave_types(cls):
@@ -69,11 +119,19 @@ class HRMSTestSuite(ERPNextTestSuite):
 			},
 		]
 		cls.leave_types = []
-		for x in records:
-			if not frappe.db.exists("Leave Type", x.get("leave_type_name")):
-				cls.leave_types.append(frappe.get_doc(x).insert())
-			else:
-				cls.leave_types.append(frappe.get_doc("Leave Type", x.get("leave_type_name")))
+		cls.make_records(["leave_type_name"], records, "leave_types")
+
+	@classmethod
+	def make_leave_period(cls):
+		records = [
+			{
+				"doctype": "Leave Period",
+				"company": "_Test Company",
+				"from_date": "2013-01-01",
+				"to_date": "2019-12-31",
+			}
+		]
+		cls.make_records(["from_date", "to_date", "company"], records, "leave_periods")
 
 	@classmethod
 	def make_leave_allocations(cls):
@@ -85,7 +143,7 @@ class HRMSTestSuite(ERPNextTestSuite):
 				"doctype": "Leave Allocation",
 				"employee": "_T-Employee-00001",
 				"from_date": "2013-01-01",
-				"to_date": "2013-12-31",
+				"to_date": "2019-12-31",
 				"leave_type": "_Test Leave Type",
 				"new_leaves_allocated": 15,
 			},
@@ -99,22 +157,146 @@ class HRMSTestSuite(ERPNextTestSuite):
 				"new_leaves_allocated": 15,
 			},
 		]
+		cls.make_records(["employee", "from_date", "to_date"], records, "leave_allocations")
 
-		cls.leave_allocations = []
+	@classmethod
+	def make_leave_applications(cls):
+		records = [
+			{
+				"company": "_Test Company",
+				"doctype": "Leave Application",
+				"employee": "_T-Employee-00001",
+				"from_date": "2013-05-01",
+				"description": "_Test Reason",
+				"leave_type": "_Test Leave Type",
+				"posting_date": "2013-01-02",
+				"to_date": "2013-05-05",
+			},
+			{
+				"company": "_Test Company",
+				"doctype": "Leave Application",
+				"employee": "_T-Employee-00002",
+				"from_date": "2013-05-01",
+				"description": "_Test Reason",
+				"leave_type": "_Test Leave Type",
+				"posting_date": "2013-01-02",
+				"to_date": "2013-05-05",
+			},
+			{
+				"company": "_Test Company",
+				"doctype": "Leave Application",
+				"employee": "_T-Employee-00001",
+				"from_date": "2013-01-15",
+				"description": "_Test Reason",
+				"leave_type": "_Test Leave Type LWP",
+				"posting_date": "2013-01-02",
+				"to_date": "2013-01-15",
+			},
+		]
+		cls.make_records(["employee", "from_date"], records, "leave_applications")
+
+	@classmethod
+	def make_leave_block_lists(cls):
+		records = [
+			{
+				"company": "_Test Company",
+				"doctype": "Leave Block List",
+				"leave_block_list_allowed": [
+					{
+						"allow_user": "test1@example.com",
+						"doctype": "Leave Block List Allow",
+						"parent": "_Test Leave Block List",
+						"parentfield": "leave_block_list_allowed",
+						"parenttype": "Leave Block List",
+					}
+				],
+				"leave_block_list_dates": [
+					{
+						"block_date": "2013-01-02",
+						"doctype": "Leave Block List Date",
+						"parent": "_Test Leave Block List",
+						"parentfield": "leave_block_list_dates",
+						"parenttype": "Leave Block List",
+						"reason": "First work day",
+					}
+				],
+				"leave_block_list_name": "_Test Leave Block List",
+				"year": "_Test Fiscal Year 2013",
+				"applies_to_all_departments": 1,
+			},
+			{
+				"company": "_Test Company",
+				"doctype": "Leave Block List",
+				"leave_type": "Casual Leave",
+				"leave_block_list_allowed": [
+					{
+						"allow_user": "test1@example.com",
+						"doctype": "Leave Block List Allow",
+						"parent": "_Test Leave Block List Casual Leave 1",
+						"parentfield": "leave_block_list_allowed",
+						"parenttype": "Leave Block List",
+					}
+				],
+				"leave_block_list_dates": [
+					{
+						"block_date": "2013-01-16",
+						"doctype": "Leave Block List Date",
+						"parent": "_Test Leave Block List Casual Leave 1",
+						"parentfield": "leave_block_list_dates",
+						"parenttype": "Leave Block List",
+						"reason": "First work day",
+					}
+				],
+				"leave_block_list_name": "_Test Leave Block List Casual Leave 1",
+				"year": "_Test Fiscal Year 2013",
+				"applies_to_all_departments": 1,
+			},
+			{
+				"company": "_Test Company",
+				"doctype": "Leave Block List",
+				"leave_type": "Casual Leave",
+				"leave_block_list_allowed": [],
+				"leave_block_list_dates": [
+					{
+						"block_date": "2013-01-19",
+						"doctype": "Leave Block List Date",
+						"parent": "_Test Leave Block List Casual Leave 2",
+						"parentfield": "leave_block_list_dates",
+						"parenttype": "Leave Block List",
+						"reason": "First work day",
+					}
+				],
+				"leave_block_list_name": "_Test Leave Block List Casual Leave 2",
+				"year": "_Test Fiscal Year 2013",
+				"applies_to_all_departments": 1,
+			},
+		]
+		cls.make_records(["leave_block_list_name"], records, "leave_block_lists")
+
+	@classmethod
+	def update_email_account_settings(cls):
+		email_account = frappe.get_doc("Email Account", "Jobs")
+		email_account.enable_outgoing = 1
+		email_account.default_outgoing = 1
+		email_account.save()
+
+	@classmethod
+	def make_records(self, key, records, attr):
+		doctype = records[0].get("doctype")
+
+		def get_filters(record):
+			filters = {}
+			for x in key:
+				filters[x] = record.get(x)
+			return filters
+
 		for x in records:
-			if not frappe.db.exists(
-				"Leave Allocation",
-				{"employee": x.get("employee"), "from_date": x.get("from_date"), "to_date": x.get("to_date")},
-			):
-				cls.leave_allocations.append(frappe.get_doc(x).insert())
-			else:
-				cls.leave_allocations.append(
-					frappe.get_doc(
-						"Employee",
-						{
-							"employee": x.get("employee"),
-							"from_date": x.get("from_date"),
-							"to_date": x.get("to_date"),
-						},
-					)
-				)
+			filters = get_filters(x)
+			if not frappe.db.exists(doctype, filters):
+				doc = frappe.get_doc(x).insert()
+				if doctype == "Holiday List":
+					doc.get_weekly_off_dates()
+					doc.save()
+
+	def tearDown(self):
+		frappe.db.rollback()
