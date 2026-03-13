@@ -892,7 +892,7 @@ class PayrollEntry(Document):
 			accounting_dimensions,
 		)
 
-		if amt:
+		if amt or (amt >= 0 and entry_type == "payable" and account == self.payroll_payable_account):
 			accounts.append(row)
 
 		return payable_amount
