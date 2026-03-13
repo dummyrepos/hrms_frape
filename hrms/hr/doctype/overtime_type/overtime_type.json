@@ -8,8 +8,11 @@
  "field_order": [
   "section_break_pai1",
   "maximum_overtime_hours_allowed",
+  "accrue_compensatory_off",
+  "accrue_compensatory_off_on_workdays",
   "column_break_meuk",
   "overtime_salary_component",
+  "compensatory_off_component",
   "section_break_xxdv",
   "overtime_calculation_method",
   "column_break_vnde",
@@ -128,11 +131,34 @@
   {
    "fieldname": "column_break_cdtj",
    "fieldtype": "Column Break"
+  },
+  {
+   "default": "0",
+   "description": "Enable this to allocate compensatory leave for overtime exceeding the maximum allowed per day instead of paying it",
+   "fieldname": "accrue_compensatory_off",
+   "fieldtype": "Check",
+   "label": "Accrue Compensatory Off"
+  },
+  {
+   "default": "0",
+   "depends_on": "accrue_compensatory_off",
+   "description": "Enable this to allocate compensatory leave for excess overtime on regular working days, not just holidays or weekends",
+   "fieldname": "accrue_compensatory_off_on_workdays",
+   "fieldtype": "Check",
+   "label": "Accrue Compensatory Off On Workdays"
+  },
+  {
+   "depends_on": "accrue_compensatory_off",
+   "fieldname": "compensatory_off_component",
+   "fieldtype": "Link",
+   "label": "Compensatory Off Component",
+   "mandatory_depends_on": "accrue_compensatory_off",
+   "options": "Leave Type"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2025-08-11 12:05:23.356474",
+ "modified": "2025-12-15 02:10:17.298755",
  "modified_by": "Administrator",
  "module": "HR",
  "name": "Overtime Type",
